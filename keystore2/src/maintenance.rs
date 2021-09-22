@@ -23,8 +23,9 @@ use crate::globals::{DB, LEGACY_MIGRATOR, SUPER_KEY};
 use crate::permission::{KeyPerm, KeystorePerm};
 use crate::super_key::UserState;
 use crate::utils::{check_key_permission, check_keystore_permission, watchdog as wd};
-use android_hardware_security_keymint::aidl::android::hardware::security::keymint::IKeyMintDevice::IKeyMintDevice;
-use android_hardware_security_keymint::aidl::android::hardware::security::keymint::SecurityLevel::SecurityLevel;
+use android_hardware_security_keymint::aidl::android::hardware::security::keymint::{
+    IKeyMintDevice::IKeyMintDevice, SecurityLevel::SecurityLevel,
+};
 use android_security_maintenance::aidl::android::security::maintenance::{
     IKeystoreMaintenance::{BnKeystoreMaintenance, IKeystoreMaintenance},
     UserState::UserState as AidlUserState,
@@ -156,11 +157,8 @@ impl Maintenance {
     where
         F: Fn(Strong<dyn IKeyMintDevice>) -> binder::public_api::Result<()>,
     {
-        let (dev, _, _) = get_keymint_device(&sec_level)
+        let (km_dev, _, _) = get_keymint_device(&sec_level)
             .context("In call_with_watchdog: getting keymint device")?;
-        let km_dev: Strong<dyn IKeyMintDevice> = dev
-            .get_interface()
-            .context("In call_with_watchdog: getting keymint device interface")?;
 
         let _wp = wd::watch_millis_with("In call_with_watchdog", 500, move || {
             format!("Seclevel: {:?} Op: {}", sec_level, name)
@@ -223,9 +221,9 @@ impl Maintenance {
             let key_id_guard = match source.domain {
                 Domain::APP | Domain::SELINUX | Domain::KEY_ID => {
                     let (key_id_guard, _) = LEGACY_MIGRATOR
-                        .with_try_migrate(&source, caller_uid, || {
+                        .with_try_migrate(source, caller_uid, || {
                             db.borrow_mut().load_key_entry(
-                                &source,
+                                source,
                                 KeyType::Client,
                                 KeyEntryLoadBits::NONE,
                                 caller_uid,

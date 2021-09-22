@@ -16,31 +16,39 @@
 
 #pragma once
 
-#include <optional>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include <android-base/macros.h>
 #include <android-base/result.h>
 
 #include <utils/StrongPointer.h>
 
 #include <android/system/keystore2/IKeystoreService.h>
 
-class KeystoreHmacKey {
+class FakeCompOs {
     using IKeystoreService = ::android::system::keystore2::IKeystoreService;
     using IKeystoreSecurityLevel = ::android::system::keystore2::IKeystoreSecurityLevel;
     using KeyDescriptor = ::android::system::keystore2::KeyDescriptor;
+    using KeyMetadata = ::android::system::keystore2::KeyMetadata;
 
   public:
-    KeystoreHmacKey();
-    android::base::Result<void> initialize(android::sp<IKeystoreService> service,
-                                           android::sp<IKeystoreSecurityLevel> securityLevel);
-    android::base::Result<std::string> sign(const std::string& message) const;
-    android::base::Result<void> verify(const std::string& message,
-                                       const std::string& signature) const;
-    android::base::Result<void> deleteKey() const;
+    using ByteVector = std::vector<uint8_t>;
+
+    static android::base::Result<std::unique_ptr<FakeCompOs>>
+    startInstance(const std::string& instanceImagePath);
+
+    android::base::Result<void> loadAndVerifyKey(const ByteVector& keyBlob,
+                                                 const ByteVector& publicKey) const;
 
   private:
-    android::base::Result<void> createKey();
+    FakeCompOs();
+
+    android::base::Result<void> initialize();
+
+    android::base::Result<ByteVector> signData(const ByteVector& keyBlob,
+                                               const ByteVector& data) const;
+
     KeyDescriptor mDescriptor;
     android::sp<IKeystoreService> mService;
     android::sp<IKeystoreSecurityLevel> mSecurityLevel;
