@@ -62,11 +62,11 @@ impl KeyMintDevice {
 
     /// Get a [`KeyMintDevice`] for the given [`SecurityLevel`]
     pub fn get(security_level: SecurityLevel) -> Result<KeyMintDevice> {
-        let (asp, hw_info, km_uuid) = get_keymint_device(&security_level)
+        let (km_dev, hw_info, km_uuid) = get_keymint_device(&security_level)
             .context("In KeyMintDevice::get: get_keymint_device failed")?;
 
         Ok(KeyMintDevice {
-            km_dev: asp.get_interface()?,
+            km_dev,
             km_uuid,
             version: hw_info.versionNumber,
             security_level: hw_info.securityLevel,
@@ -120,7 +120,7 @@ impl KeyMintDevice {
         blob_metadata.add(BlobMetaEntry::KmUuid(self.km_uuid));
 
         db.store_new_key(
-            &key_desc,
+            key_desc,
             key_type,
             &key_parameters,
             &(&creation_result.keyBlob, &blob_metadata),
@@ -148,7 +148,7 @@ impl KeyMintDevice {
         key_desc: &KeyDescriptor,
         key_type: KeyType,
     ) -> Result<(KeyIdGuard, KeyEntry)> {
-        db.load_key_entry(&key_desc, key_type, KeyEntryLoadBits::KM, AID_KEYSTORE, |_, _| Ok(()))
+        db.load_key_entry(key_desc, key_type, KeyEntryLoadBits::KM, AID_KEYSTORE, |_, _| Ok(()))
             .context("In lookup_from_desc: load_key_entry failed.")
     }
 
@@ -228,8 +228,8 @@ impl KeyMintDevice {
             };
         }
 
-        self.create_and_store_key(db, &key_desc, key_type, |km_dev| {
-            km_dev.generateKey(&params, None)
+        self.create_and_store_key(db, key_desc, key_type, |km_dev| {
+            km_dev.generateKey(params, None)
         })
         .context("In lookup_or_generate_key: generate_and_store_key failed")?;
         Self::lookup_from_desc(db, key_desc, key_type)

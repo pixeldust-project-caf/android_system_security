@@ -44,7 +44,7 @@ use crate::database::{CertificateChain, KeystoreDB, Uuid};
 use crate::error::{self, map_or_log_err, map_rem_prov_error, Error};
 use crate::globals::{get_keymint_device, get_remotely_provisioned_component, DB};
 use crate::metrics_store::log_rkp_error_stats;
-use crate::utils::{watchdog as wd, Asp};
+use crate::utils::watchdog as wd;
 use android_security_metrics::aidl::android::security::metrics::RkpError::RkpError as MetricsRkpError;
 
 /// Contains helper functions to check if remote provisioning is enabled on the system and, if so,
@@ -182,7 +182,7 @@ impl RemProvState {
             // and therefore will not be attested.
             Ok(None)
         } else {
-            match self.get_rem_prov_attest_key(&key, caller_uid, db) {
+            match self.get_rem_prov_attest_key(key, caller_uid, db) {
                 Err(e) => {
                     log::error!(
                         concat!(
@@ -218,7 +218,7 @@ impl RemProvState {
 /// Implementation of the IRemoteProvisioning service.
 #[derive(Default)]
 pub struct RemoteProvisioningService {
-    device_by_sec_level: HashMap<SecurityLevel, Asp>,
+    device_by_sec_level: HashMap<SecurityLevel, Strong<dyn IRemotelyProvisionedComponent>>,
     curve_by_sec_level: HashMap<SecurityLevel, i32>,
 }
 
@@ -228,7 +228,7 @@ impl RemoteProvisioningService {
         sec_level: &SecurityLevel,
     ) -> Result<Strong<dyn IRemotelyProvisionedComponent>> {
         if let Some(dev) = self.device_by_sec_level.get(sec_level) {
-            dev.get_interface().context("In get_dev_by_sec_level.")
+            Ok(dev.clone())
         } else {
             Err(error::Error::sys()).context(concat!(
                 "In get_dev_by_sec_level: Remote instance for requested security level",
@@ -242,21 +242,17 @@ impl RemoteProvisioningService {
         let mut result: Self = Default::default();
         let dev = get_remotely_provisioned_component(&SecurityLevel::TRUSTED_ENVIRONMENT)
             .context("In new_native_binder: Failed to get TEE Remote Provisioner instance.")?;
-        let rkp_tee_dev: Strong<dyn IRemotelyProvisionedComponent> = dev.get_interface()?;
         result.curve_by_sec_level.insert(
             SecurityLevel::TRUSTED_ENVIRONMENT,
-            rkp_tee_dev
-                .getHardwareInfo()
+            dev.getHardwareInfo()
                 .context("In new_native_binder: Failed to get hardware info for the TEE.")?
                 .supportedEekCurve,
         );
         result.device_by_sec_level.insert(SecurityLevel::TRUSTED_ENVIRONMENT, dev);
         if let Ok(dev) = get_remotely_provisioned_component(&SecurityLevel::STRONGBOX) {
-            let rkp_sb_dev: Strong<dyn IRemotelyProvisionedComponent> = dev.get_interface()?;
             result.curve_by_sec_level.insert(
                 SecurityLevel::STRONGBOX,
-                rkp_sb_dev
-                    .getHardwareInfo()
+                dev.getHardwareInfo()
                     .context("In new_native_binder: Failed to get hardware info for StrongBox.")?
                     .supportedEekCurve,
             );

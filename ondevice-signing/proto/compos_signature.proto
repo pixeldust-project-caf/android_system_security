@@ -13,6 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include "sys/system_properties.h"
+syntax = "proto3";
+
+package compos.proto;
+
+// Data provided by CompOS to allow validation of a file it generated.
+message Signature {
+    // The fs-verity digest (which is derived from the root hash of
+    // the Merkle tree) of the file contents.
+    bytes digest = 1;
+
+    // Signature of a fsverity_formatted_digest structure containing
+    // the digest, signed using CompOS's private key.
+    bytes signature = 2;
+}
