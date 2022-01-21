@@ -14,31 +14,8 @@
  * limitations under the License.
  */
 
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
+#include <mini_keyctl_utils.h>
 
-cc_library_static {
-    name: "lib_odsign_proto",
-    host_supported: true,
-    proto: {
-        export_proto_headers: true,
-        type: "lite",
-    },
-    srcs: ["odsign_info.proto"],
-}
-
-cc_library_static {
-    name: "lib_compos_proto",
-    host_supported: true,
-    proto: {
-        export_proto_headers: true,
-        type: "lite",
-    },
-    srcs: ["compos_signature.proto"],
-    apex_available: [
-        "//apex_available:platform",
-        "com.android.compos",
-    ],
-    recovery_available: true,
-}
+bool LoadKeyFromStdin(key_serial_t keyring_id, const char* keyname);
+void LoadKeyFromFile(key_serial_t keyring_id, const char* keyname, const std::string& path);
+void LoadKeyFromVerifiedPartitions(key_serial_t keyring_id);
