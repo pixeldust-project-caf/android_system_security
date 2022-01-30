@@ -75,7 +75,7 @@ static int read_callback(void* file, void* buf, size_t count) {
     return 0;
 }
 
-Result<std::vector<uint8_t>> createDigest(int fd) {
+static Result<std::vector<uint8_t>> createDigest(int fd) {
     struct stat filestat;
     int ret = fstat(fd, &filestat);
     if (ret < 0) {
@@ -148,7 +148,7 @@ static Result<std::vector<uint8_t>> signDigest(const SigningKey& key,
     return std::vector<uint8_t>(signed_digest->begin(), signed_digest->end());
 }
 
-Result<void> enableFsVerity(int fd, std::span<uint8_t> pkcs7) {
+static Result<void> enableFsVerity(int fd, std::span<uint8_t> pkcs7) {
     struct fsverity_enable_arg arg = {.version = 1};
 
     arg.sig_ptr = reinterpret_cast<uint64_t>(pkcs7.data());
@@ -165,7 +165,7 @@ Result<void> enableFsVerity(int fd, std::span<uint8_t> pkcs7) {
     return {};
 }
 
-Result<std::string> enableFsVerity(int fd, const SigningKey& key) {
+static Result<std::string> enableFsVerity(int fd, const SigningKey& key) {
     auto digest = createDigest(fd);
     if (!digest.ok()) {
         return Error() << digest.error();
@@ -190,20 +190,7 @@ Result<std::string> enableFsVerity(int fd, const SigningKey& key) {
     return toHex(digest.value());
 }
 
-Result<std::string> enableFsVerity(const std::string& path, const SigningKey& key) {
-    unique_fd fd(TEMP_FAILURE_RETRY(open(path.c_str(), O_RDONLY | O_CLOEXEC)));
-    if (!fd.ok()) {
-        return ErrnoError() << "Failed to open " << path;
-    }
-
-    auto enableStatus = enableFsVerity(fd.get(), key);
-    if (!enableStatus.ok()) {
-        return Error() << path << ": " << enableStatus.error();
-    }
-    return enableStatus;
-}
-
-Result<std::string> isFileInVerity(int fd) {
+static Result<std::string> isFileInVerity(int fd) {
     auto d = makeUniqueWithTrailingData<fsverity_digest>(FS_VERITY_MAX_DIGEST_SIZE);
     d->digest_size = FS_VERITY_MAX_DIGEST_SIZE;
     auto ret = ioctl(fd, FS_IOC_MEASURE_VERITY, d.get());
@@ -217,7 +204,7 @@ Result<std::string> isFileInVerity(int fd) {
     return toHex({&d->digest[0], &d->digest[d->digest_size]});
 }
 
-Result<std::string> isFileInVerity(const std::string& path) {
+static Result<std::string> isFileInVerity(const std::string& path) {
     unique_fd fd(TEMP_FAILURE_RETRY(open(path.c_str(), O_RDONLY | O_CLOEXEC)));
     if (!fd.ok()) {
         return ErrnoError() << "Failed to open " << path;
@@ -300,7 +287,6 @@ Result<void> verifyAllFilesUsingCompOs(const std::string& directory_path,
                                        const SigningKey& signing_key) {
     std::error_code ec;
     auto it = std::filesystem::recursive_directory_iterator(directory_path, ec);
-    size_t verified_count = 0;
     for (auto end = std::filesystem::recursive_directory_iterator(); it != end; it.increment(ec)) {
         auto& path = it->path();
         if (it->is_regular_file()) {
@@ -319,9 +305,7 @@ Result<void> verifyAllFilesUsingCompOs(const std::string& directory_path,
             if (verity_digest.ok()) {
                 // The file is already in fs-verity. We need to make sure it was signed
                 // by CompOS, so we just check that it has the digest we expect.
-                if (verity_digest.value() == compos_digest) {
-                    ++verified_count;
-                } else {
+                if (verity_digest.value() != compos_digest) {
                     return Error() << "fs-verity digest does not match CompOS digest: " << path;
                 }
             } else {
@@ -349,7 +333,6 @@ Result<void> verifyAllFilesUsingCompOs(const std::string& directory_path,
                 if (!enabled.ok()) {
                     return Error() << enabled.error();
                 }
-                ++verified_count;
             }
         } else if (it->is_directory()) {
             // These are fine to ignore
@@ -361,10 +344,6 @@ Result<void> verifyAllFilesUsingCompOs(const std::string& directory_path,
     }
     if (ec) {
         return Error() << "Failed to iterate " << directory_path << ": " << ec.message();
-    }
-    // Make sure all the files we expected have been seen
-    if (verified_count != digests.size()) {
-        return Error() << "Verified " << verified_count << "files, but expected " << digests.size();
     }
 
     return {};
