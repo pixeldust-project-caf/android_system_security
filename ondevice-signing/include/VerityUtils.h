@@ -18,6 +18,10 @@
 
 #include <android-base/result.h>
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "SigningKey.h"
 
 android::base::Result<void> addCertToFsVerityKeyring(const std::string& path, const char* keyName);
@@ -25,8 +29,12 @@ android::base::Result<std::vector<uint8_t>> createDigest(const std::string& path
 android::base::Result<std::map<std::string, std::string>>
 verifyAllFilesInVerity(const std::string& path);
 
+// Note that this function will skip files that are already in fs-verity, and
+// for those files it will return the existing digest.
 android::base::Result<std::map<std::string, std::string>>
 addFilesToVerityRecursive(const std::string& path, const SigningKey& key);
 
-android::base::Result<std::map<std::string, std::string>>
-verifyAllFilesUsingCompOs(const std::string& path, const std::vector<uint8_t>& compos_key);
+android::base::Result<void>
+verifyAllFilesUsingCompOs(const std::string& directory_path,
+                          const std::map<std::string, std::string>& digests,
+                          const SigningKey& signing_key);
