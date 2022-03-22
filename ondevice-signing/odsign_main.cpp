@@ -53,7 +53,6 @@ const std::string kArtArtifactsDir = "/data/misc/apexdata/com.android.art/dalvik
 constexpr const char* kOdrefreshPath = "/apex/com.android.art/bin/odrefresh";
 constexpr const char* kCompOsVerifyPath = "/apex/com.android.compos/bin/compos_verify_key";
 constexpr const char* kFsVerityProcPath = "/proc/sys/fs/verity";
-constexpr const char* kKvmDevicePath = "/dev/kvm";
 
 constexpr bool kForceCompilation = false;
 constexpr bool kUseCompOs = true;
@@ -145,7 +144,8 @@ std::string toHex(const std::vector<uint8_t>& digest) {
 }
 
 bool compOsPresent() {
-    return access(kCompOsVerifyPath, X_OK) == 0 && access(kKvmDevicePath, F_OK) == 0;
+    // We must have the CompOS APEX
+    return access(kCompOsVerifyPath, X_OK) == 0;
 }
 
 Result<void> verifyExistingRootCert(const SigningKey& key) {
@@ -502,7 +502,8 @@ art::odrefresh::ExitCode checkCompOsPendingArtifacts(const std::vector<uint8_t>&
                                                      const SigningKey& signing_key,
                                                      bool* digests_verified) {
     if (!directoryHasContent(kCompOsPendingArtifactsDir)) {
-        return art::odrefresh::ExitCode::kCompilationRequired;
+        // No pending CompOS artifacts, all that matters is the current ones.
+        return checkArtifacts();
     }
 
     // CompOS has generated some artifacts that may, or may not, match the
@@ -653,8 +654,8 @@ int main(int /* argc */, char** argv) {
     if (useCompOs) {
         auto compos_key = addCompOsCertToFsVerityKeyring(*key);
         if (!compos_key.ok()) {
-            odrefresh_status = art::odrefresh::ExitCode::kCompilationRequired;
             LOG(WARNING) << compos_key.error();
+            odrefresh_status = checkArtifacts();
         } else {
             odrefresh_status =
                 checkCompOsPendingArtifacts(compos_key.value(), *key, &digests_verified);
